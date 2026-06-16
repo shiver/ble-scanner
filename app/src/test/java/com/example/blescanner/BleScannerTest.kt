@@ -41,6 +41,17 @@ class BleScannerTest {
     }
 
     @Test
+    fun requiredPermissionsForAndroid9AndBelowIncludesFineAndCoarseLocation() {
+        assertEquals(
+            listOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+            ),
+            AndroidBleScanner.requiredPermissionsForSdk(Build.VERSION_CODES.P),
+        )
+    }
+
+    @Test
     fun backgroundLocationPermissionForAndroid10AndAbove() {
         assertEquals(
             Manifest.permission.ACCESS_BACKGROUND_LOCATION,

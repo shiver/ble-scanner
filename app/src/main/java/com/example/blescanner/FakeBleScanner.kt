@@ -1,10 +1,13 @@
 package com.example.blescanner
 
+import android.util.Log
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlin.time.Duration.Companion.milliseconds
+
+private const val FAKE_BLE_SCANNER_TAG = "FakeBleScanner"
 
 class FakeBleScanner(
     private val scenario: FakeScanScenario = FakeScanScenario.MixedDevices,
@@ -13,17 +16,29 @@ class FakeBleScanner(
         scanMode: BleScanMode,
         filterMode: BleScanFilterMode,
     ): Flow<BleDevice> = flow {
+        Log.i(
+            FAKE_BLE_SCANNER_TAG,
+            "Fake scan started with mode=$scanMode filterMode=$filterMode scenario=${scenario.name}",
+        )
+
         var sequence = 0
-        if (scenario.devices.isEmpty()) awaitCancellation()
+        if (scenario.devices.isEmpty()) {
+            Log.i(FAKE_BLE_SCANNER_TAG, "Fake scenario is empty; no devices will be emitted")
+            awaitCancellation()
+        }
 
         while (true) {
             for (device in scenario.devices) {
-                emit(
-                    device.copy(
-                        rssi = device.rssi + scenario.rssiOffsetFor(sequence),
-                        lastSeenMillis = System.currentTimeMillis(),
-                    ),
+                val emittedDevice = device.copy(
+                    rssi = device.rssi + scenario.rssiOffsetFor(sequence),
+                    lastSeenMillis = System.currentTimeMillis(),
                 )
+                Log.i(
+                    FAKE_BLE_SCANNER_TAG,
+                    "Fake scan result: address=${emittedDevice.address}, rssi=${emittedDevice.rssi}, " +
+                        "iBeacon=${emittedDevice.iBeacon != null}, mode=$scanMode, filterMode=$filterMode",
+                )
+                emit(emittedDevice)
                 delay(scenario.delayBetweenDevicesMillis.milliseconds)
             }
             sequence++
@@ -32,12 +47,14 @@ class FakeBleScanner(
 }
 
 sealed class FakeScanScenario(
+    val name: String,
     val devices: List<BleDevice>,
     val delayBetweenDevicesMillis: Long = 250L,
 ) {
     open fun rssiOffsetFor(sequence: Int): Int = 0
 
     data object MixedDevices : FakeScanScenario(
+        name = "MixedDevices",
         devices = listOf(
             BleDevice(
                 name = "Fake iBeacon",
@@ -73,5 +90,8 @@ sealed class FakeScanScenario(
         }
     }
 
-    data object Empty : FakeScanScenario(devices = emptyList())
+    data object Empty : FakeScanScenario(
+        name = "Empty",
+        devices = emptyList(),
+    )
 }

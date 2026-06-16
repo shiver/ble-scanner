@@ -16,6 +16,7 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import java.util.Locale
 
 private const val BLE_SCANNER_TAG = "BleScanner"
 
@@ -58,11 +59,8 @@ class AndroidBleScanner(
             return@callbackFlow
         }
 
-        if (!applicationContext.packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
-            Log.w(BLE_SCANNER_TAG, "Cannot start scan: Bluetooth LE is unavailable")
-            close(IllegalStateException("Bluetooth LE is not available on this device"))
-            return@callbackFlow
-        }
+        val hasBleFeature = applicationContext.packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)
+        Log.i(BLE_SCANNER_TAG, "Bluetooth LE feature declared by device: $hasBleFeature")
 
         if (bluetoothAdapter == null) {
             Log.w(BLE_SCANNER_TAG, "Cannot start scan: Bluetooth adapter is unavailable")
@@ -151,10 +149,8 @@ class AndroidBleScanner(
             )
         }
 
-    fun hasRequiredPermissions(): Boolean = requiredPermissions().all { permission ->
-        ContextCompat.checkSelfPermission(applicationContext, permission) ==
-            PackageManager.PERMISSION_GRANTED
-    }
+    fun hasRequiredPermissions(): Boolean =
+        BluetoothPermissions.missingRuntimePermissions(applicationContext).isEmpty()
 
     fun requiredPermissions(): List<String> = requiredPermissionsForSdk(Build.VERSION.SDK_INT)
 
@@ -199,8 +195,8 @@ private fun Int.bluetoothCompanyName(): String = when (this) {
 
 object BluetoothPermissions {
     fun runtimePermissionsForSdk(sdkInt: Int): List<String> =
-        if (sdkInt >= Build.VERSION_CODES.S) {
-            buildList {
+        when {
+            sdkInt >= Build.VERSION_CODES.S -> buildList {
                 add(Manifest.permission.BLUETOOTH_SCAN)
                 add(Manifest.permission.BLUETOOTH_CONNECT)
                 add(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -208,9 +204,31 @@ object BluetoothPermissions {
                     add(Manifest.permission.POST_NOTIFICATIONS)
                 }
             }
-        } else {
-            listOf(Manifest.permission.ACCESS_FINE_LOCATION)
+            sdkInt >= Build.VERSION_CODES.Q -> listOf(Manifest.permission.ACCESS_FINE_LOCATION)
+            else -> listOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+            )
         }
+
+    fun missingRuntimePermissions(context: Context): List<String> {
+        val sdkInt = Build.VERSION.SDK_INT
+        val permissions = runtimePermissionsForSdk(sdkInt)
+
+        if (sdkInt in Build.VERSION_CODES.M until Build.VERSION_CODES.Q) {
+            val hasFineLocation = context.hasPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+            val hasCoarseLocation = context.hasPermission(Manifest.permission.ACCESS_COARSE_LOCATION)
+            return permissions
+                .filterNot { permission ->
+                    permission == Manifest.permission.ACCESS_FINE_LOCATION ||
+                        permission == Manifest.permission.ACCESS_COARSE_LOCATION
+                }
+                .filterNot(context::hasPermission) +
+                if (hasFineLocation || hasCoarseLocation) emptyList() else listOf(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+
+        return permissions.filterNot(context::hasPermission)
+    }
 
     fun backgroundLocationPermissionForSdk(sdkInt: Int): String? =
         if (sdkInt >= Build.VERSION_CODES.Q) Manifest.permission.ACCESS_BACKGROUND_LOCATION else null
@@ -218,6 +236,31 @@ object BluetoothPermissions {
     fun runtimePermissions(): List<String> = runtimePermissionsForSdk(Build.VERSION.SDK_INT)
 
     fun backgroundLocationPermission(): String? = backgroundLocationPermissionForSdk(Build.VERSION.SDK_INT)
+}
+
+private fun Context.hasPermission(permission: String): Boolean =
+    ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+
+object DeviceEnvironment {
+    fun isEmulator(): Boolean {
+        val fingerprint = Build.FINGERPRINT.lowercase(Locale.US)
+        val model = Build.MODEL.lowercase(Locale.US)
+        val manufacturer = Build.MANUFACTURER.lowercase(Locale.US)
+        val brand = Build.BRAND.lowercase(Locale.US)
+        val device = Build.DEVICE.lowercase(Locale.US)
+        val product = Build.PRODUCT.lowercase(Locale.US)
+
+        return fingerprint.startsWith("generic") ||
+            fingerprint.startsWith("unknown") ||
+            model.contains("google_sdk") ||
+            model.contains("emulator") ||
+            model.contains("android sdk built for") ||
+            manufacturer.contains("genymotion") ||
+            brand.startsWith("generic") && device.startsWith("generic") ||
+            product.contains("sdk") ||
+            product.contains("emulator") ||
+            product.contains("simulator")
+    }
 }
 
 private const val APPLE_COMPANY_ID = 0x004c

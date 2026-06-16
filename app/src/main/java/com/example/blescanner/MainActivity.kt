@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -45,6 +46,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.blescanner.ui.theme.BLEScannerTheme
+
+private const val MAIN_ACTIVITY_TAG = "MainActivity"
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -138,35 +141,48 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun currentPermissionState(): PermissionState {
-        val missingPermissions = BluetoothPermissions.runtimePermissions().filter { permission ->
-            ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED
-        }
+        val missingPermissions = BluetoothPermissions.missingRuntimePermissions(this)
         val backgroundLocationPermission = BluetoothPermissions.backgroundLocationPermission()
         val hasBackgroundLocation = backgroundLocationPermission == null ||
             ContextCompat.checkSelfPermission(this, backgroundLocationPermission) == PackageManager.PERMISSION_GRANTED
 
-        return PermissionState(
+        val state = PermissionState(
             missingPermissions = missingPermissions,
             shouldShowRationale = missingPermissions.any { permission ->
                 shouldShowRequestPermissionRationale(permission)
             },
             hasBackgroundLocation = hasBackgroundLocation,
         )
+        Log.i(
+            MAIN_ACTIVITY_TAG,
+            "Permission state: missing=${state.missingPermissions}, " +
+                "hasAll=${state.hasAllPermissions}, hasBackgroundLocation=${state.hasBackgroundLocation}",
+        )
+        return state
     }
 
     private fun currentBluetoothState(): BluetoothState {
-        if (!packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
+        if (DeviceEnvironment.isEmulator()) {
+            Log.i(MAIN_ACTIVITY_TAG, "Emulator detected; treating Bluetooth as available for fake scanning")
+            return BluetoothState.Enabled
+        }
+
+        val hasBleFeature = packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)
+        Log.i(MAIN_ACTIVITY_TAG, "Bluetooth LE feature declared by device: $hasBleFeature")
+
+        val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+        val bluetoothAdapter = bluetoothManager.adapter ?: run {
+            Log.i(MAIN_ACTIVITY_TAG, "Bluetooth state: unavailable, adapter is null")
             return BluetoothState.Unavailable
         }
 
-        val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-        val bluetoothAdapter = bluetoothManager.adapter ?: return BluetoothState.Unavailable
-
-        return if (bluetoothAdapter.isEnabled) {
+        val state = if (bluetoothAdapter.isEnabled) {
             BluetoothState.Enabled
         } else {
             BluetoothState.Disabled
         }
+        Log.i(MAIN_ACTIVITY_TAG, "Bluetooth state: $state")
+        return state
     }
 }
 
@@ -202,6 +218,12 @@ private fun ScannerScreen(
             errorMessage = uiState.errorMessage,
             onRequestPermissions = onRequestPermissions,
             onOpenAppSettings = onOpenAppSettings,
+        )
+
+        Text(
+            text = "Debug: canScan=$canScan, permissions=${permissionState.hasAllPermissions}, " +
+                "bluetooth=$bluetoothState, missing=${permissionState.missingPermissions.joinToString()}",
+            style = MaterialTheme.typography.bodySmall,
         )
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -260,6 +282,7 @@ private fun StatusMessage(
                     "Bluetooth scanning permissions are required."
                 },
             )
+            Text("Missing: ${permissionState.missingPermissions.joinToString()}")
             Button(onClick = onRequestPermissions) {
                 Text("Grant permissions")
             }

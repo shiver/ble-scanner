@@ -33,7 +33,12 @@ class BleScanForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        bleScanner = AndroidBleScanner(this)
+        bleScanner = if (DeviceEnvironment.isEmulator()) {
+            Log.i(BLE_SCAN_SERVICE_TAG, "Emulator detected; using FakeBleScanner")
+            FakeBleScanner()
+        } else {
+            AndroidBleScanner(this)
+        }
         createNotificationChannel()
     }
 
