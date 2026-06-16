@@ -13,15 +13,19 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 
-class BleScanner(
+interface BleScanner {
+    fun scanResults(): Flow<BleDevice>
+}
+
+class AndroidBleScanner(
     context: Context,
-) {
+) : BleScanner {
     private val applicationContext = context.applicationContext
     private val bluetoothManager =
         applicationContext.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val bluetoothAdapter = bluetoothManager.adapter
 
-    fun scanResults(): Flow<BleDevice> = callbackFlow {
+    override fun scanResults(): Flow<BleDevice> = callbackFlow {
         // Importantly we don't cache things like whether or not we have the necessary permissions, or
         // the bluetooth devices, since this can change between scanning sessions.
         if (!hasRequiredPermissions()) {

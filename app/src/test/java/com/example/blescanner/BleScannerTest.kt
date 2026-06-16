@@ -13,7 +13,7 @@ class BleScannerTest {
                 Manifest.permission.BLUETOOTH_SCAN,
                 Manifest.permission.BLUETOOTH_CONNECT,
             ),
-            BleScanner.requiredPermissionsForSdk(Build.VERSION_CODES.S),
+            AndroidBleScanner.requiredPermissionsForSdk(Build.VERSION_CODES.S),
         )
     }
 
@@ -21,7 +21,7 @@ class BleScannerTest {
     fun requiredPermissionsForAndroid11AndBelow() {
         assertEquals(
             listOf(Manifest.permission.ACCESS_FINE_LOCATION),
-            BleScanner.requiredPermissionsForSdk(Build.VERSION_CODES.R),
+            AndroidBleScanner.requiredPermissionsForSdk(Build.VERSION_CODES.R),
         )
     }
 }
