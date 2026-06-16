@@ -5,7 +5,7 @@ https://community.silabs.com/s/article/Understanding-iBeacon-Packet-Format-and-S
 ## Background scanning
 
 Bluetooth scanning modes & filter:
-- App visible: Balanced / Unfiltered
+- App visible: LowLatency / Unfiltered
 - App not visible: LowPower / Apple Manufacturer ID
 - Screen off: LowPower / Apple Manufacturer ID
 

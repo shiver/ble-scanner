@@ -14,6 +14,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -33,9 +34,11 @@ class BleScanForegroundService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var scanJob: Job? = null
     private var heartbeatJob: Job? = null
+    private var pendingRestartJob: Job? = null
     private lateinit var bleScanner: BleScanner
     private var currentScanMode: BleScanMode? = null
     private var currentFilterMode: BleScanFilterMode? = null
+    private var lastScanStartElapsedMillis = 0L
     private var appVisible = true
     private var screenInteractive = true
 
@@ -101,6 +104,7 @@ class BleScanForegroundService : Service() {
     override fun onDestroy() {
         scanJob?.cancel()
         heartbeatJob?.cancel()
+        pendingRestartJob?.cancel()
         unregisterReceiver(screenStateReceiver)
         serviceScope.cancel()
         super.onDestroy()
@@ -137,6 +141,22 @@ class BleScanForegroundService : Service() {
             return
         }
 
+        val elapsedSinceLastStart = SystemClock.elapsedRealtime() - lastScanStartElapsedMillis
+        if (lastScanStartElapsedMillis != 0L && elapsedSinceLastStart < MIN_SCAN_RESTART_INTERVAL_MS) {
+            val delayMillis = MIN_SCAN_RESTART_INTERVAL_MS - elapsedSinceLastStart
+            Log.i(
+                BLE_SCAN_SERVICE_TAG,
+                "Delaying BLE scan restart for ${delayMillis}ms to avoid Android scan frequency limits",
+            )
+            pendingRestartJob?.cancel()
+            pendingRestartJob = serviceScope.launch {
+                delay(delayMillis.milliseconds)
+                restartScanning(scanMode, filterMode)
+            }
+            return
+        }
+
+        pendingRestartJob?.cancel()
         currentScanMode = scanMode
         currentFilterMode = filterMode
         scanJob?.cancel()
@@ -157,6 +177,7 @@ class BleScanForegroundService : Service() {
 
         if (scanJob?.isActive == true) return
 
+        lastScanStartElapsedMillis = SystemClock.elapsedRealtime()
         startHeartbeat(scanMode, filterMode)
 
         scanJob = serviceScope.launch {
@@ -197,7 +218,7 @@ class BleScanForegroundService : Service() {
             "BLE scanning",
             NotificationManager.IMPORTANCE_LOW,
         ).apply {
-            description = "Shows when BLE Scanner is scanning in the background"
+            description = "Shows when BLE Scanner is actively scanning"
         }
 
         getSystemService(NotificationManager::class.java)
@@ -218,11 +239,24 @@ class BleScanForegroundService : Service() {
         return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
             .setContentTitle("BLE Scanner")
-            .setContentText("Scanning for nearby BLE devices")
+            .setContentText(notificationContentText())
+            .setStyle(NotificationCompat.BigTextStyle().bigText(notificationContentText()))
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setContentIntent(openAppPendingIntent)
             .build()
+    }
+
+    private fun notificationContentText(): String =
+        if (hasBackgroundLocationPermission()) {
+            "Scanning for nearby BLE devices"
+        } else {
+            "Background scanning may be limited until all-the-time location is enabled."
+        }
+
+    private fun hasBackgroundLocationPermission(): Boolean {
+        val permission = BluetoothPermissions.backgroundLocationPermission() ?: return true
+        return ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
     }
 
     companion object {
@@ -232,5 +266,6 @@ class BleScanForegroundService : Service() {
         const val ACTION_SET_SCREEN_OFF_MODE = "com.example.blescanner.action.SET_SCREEN_OFF_MODE"
         private const val NOTIFICATION_CHANNEL_ID = "ble_scanning"
         private const val NOTIFICATION_ID = 1001
+        private const val MIN_SCAN_RESTART_INTERVAL_MS = 6_000L
     }
 }

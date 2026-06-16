@@ -1,5 +1,6 @@
 package com.example.blescanner
 
+import android.Manifest
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.Intent
@@ -68,6 +69,13 @@ class MainActivity : ComponentActivity() {
                     bluetoothState = currentBluetoothState()
                 }
 
+                val backgroundLocationLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.RequestPermission(),
+                ) {
+                    permissionState = currentPermissionState()
+                    bluetoothState = currentBluetoothState()
+                }
+
                 val isScanning by rememberUpdatedState(uiState.isScanning)
 
                 DisposableEffect(Unit) {
@@ -95,6 +103,13 @@ class MainActivity : ComponentActivity() {
                         uiState = uiState,
                         onRequestPermissions = {
                             permissionLauncher.launch(BluetoothPermissions.runtimePermissions().toTypedArray())
+                        },
+                        onRequestBackgroundLocation = {
+                            if (android.os.Build.VERSION.SDK_INT == android.os.Build.VERSION_CODES.Q) {
+                                backgroundLocationLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                            } else {
+                                openAppSettings()
+                            }
                         },
                         onOpenAppSettings = ::openAppSettings,
                         onStartScan = {
@@ -192,6 +207,7 @@ private fun ScannerScreen(
     bluetoothState: BluetoothState,
     uiState: ScannerUiState,
     onRequestPermissions: () -> Unit,
+    onRequestBackgroundLocation: () -> Unit,
     onOpenAppSettings: () -> Unit,
     onStartScan: () -> Unit,
     onStopScan: () -> Unit,
@@ -217,6 +233,7 @@ private fun ScannerScreen(
             bluetoothState = bluetoothState,
             errorMessage = uiState.errorMessage,
             onRequestPermissions = onRequestPermissions,
+            onRequestBackgroundLocation = onRequestBackgroundLocation,
             onOpenAppSettings = onOpenAppSettings,
         )
 
@@ -271,6 +288,7 @@ private fun StatusMessage(
     bluetoothState: BluetoothState,
     errorMessage: String?,
     onRequestPermissions: () -> Unit,
+    onRequestBackgroundLocation: () -> Unit,
     onOpenAppSettings: () -> Unit,
 ) {
     when {
@@ -297,9 +315,17 @@ private fun StatusMessage(
         }
 
         !permissionState.hasBackgroundLocation -> {
+            val isAndroid10 = android.os.Build.VERSION.SDK_INT == android.os.Build.VERSION_CODES.Q
             Text("Background location is not granted. Foreground scanning can work, but background scan results may be limited on this device.")
-            Button(onClick = onOpenAppSettings) {
-                Text("Open app settings")
+            Text(
+                text = if (isAndroid10) {
+                    "Android 10 allows a direct background location request after foreground location is granted."
+                } else {
+                    "Android 11+ requires enabling all-the-time/background location from the app's system settings."
+                },
+            )
+            Button(onClick = onRequestBackgroundLocation) {
+                Text(if (isAndroid10) "Grant background location" else "Open app settings")
             }
         }
 
@@ -390,6 +416,7 @@ private fun ScannerScreenPreview() {
                 devices = FakeScanScenario.MixedDevices.devices,
             ),
             onRequestPermissions = {},
+            onRequestBackgroundLocation = {},
             onOpenAppSettings = {},
             onStartScan = {},
             onStopScan = {},
