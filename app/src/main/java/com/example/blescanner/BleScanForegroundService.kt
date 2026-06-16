@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -86,13 +87,26 @@ class BleScanForegroundService : Service() {
             .createNotificationChannel(channel)
     }
 
-    private fun buildNotification(): Notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-        .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
-        .setContentTitle("BLE Scanner")
-        .setContentText("Scanning for nearby BLE devices")
-        .setOngoing(true)
-        .setPriority(NotificationCompat.PRIORITY_LOW)
-        .build()
+    private fun buildNotification(): Notification {
+        val openAppIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val openAppPendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            openAppIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
+            .setContentTitle("BLE Scanner")
+            .setContentText("Scanning for nearby BLE devices")
+            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setContentIntent(openAppPendingIntent)
+            .build()
+    }
 
     companion object {
         const val ACTION_STOP = "com.example.blescanner.action.STOP_BACKGROUND_SCAN"
