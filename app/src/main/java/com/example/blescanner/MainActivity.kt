@@ -2,6 +2,7 @@ package com.example.blescanner
 
 import android.bluetooth.BluetoothManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -80,14 +81,32 @@ class MainActivity : ComponentActivity() {
                         onRequestPermissions = {
                             permissionLauncher.launch(BluetoothPermissions.runtimePermissions().toTypedArray())
                         },
-                        onStartScan = viewModel::startScan,
-                        onStopScan = viewModel::stopScan,
+                        onStartScan = {
+                            viewModel.startScan()
+                            startBleScanForegroundService()
+                        },
+                        onStopScan = {
+                            viewModel.stopScan()
+                            stopBleScanForegroundService()
+                        },
                         onMinimumRssiChanged = viewModel::setMinimumRssi,
                         modifier = Modifier.padding(innerPadding),
                     )
                 }
             }
         }
+    }
+
+    private fun startBleScanForegroundService() {
+        val intent = Intent(this, BleScanForegroundService::class.java)
+        ContextCompat.startForegroundService(this, intent)
+    }
+
+    private fun stopBleScanForegroundService() {
+        val intent = Intent(this, BleScanForegroundService::class.java).apply {
+            action = BleScanForegroundService.ACTION_STOP
+        }
+        startService(intent)
     }
 
     private fun currentPermissionState(): PermissionState {
