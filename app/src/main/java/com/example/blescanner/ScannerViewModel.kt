@@ -59,6 +59,11 @@ class ScannerViewModel(
         startPublishing()
     }
 
+    fun setMinimumRssi(minimumRssi: Int) {
+        _uiState.value = _uiState.value.copy(minimumRssi = minimumRssi)
+        publishDevices()
+    }
+
     fun stopScan() {
         scanJob?.cancel()
         scanJob = null
@@ -93,6 +98,7 @@ class ScannerViewModel(
         val visibleDevices = devicesByAddress.values
             .asSequence()
             .filter { device -> now - device.lastSeenMillis <= DEVICE_TIMEOUT_MS }
+            .filter { device -> device.rssi >= currentState.minimumRssi }
             .sortedByDescending { device -> device.rssi }
             .toList()
 
@@ -113,4 +119,5 @@ data class ScannerUiState(
     val isScanning: Boolean = false,
     val devices: List<BleDevice> = emptyList(),
     val errorMessage: String? = null,
+    val minimumRssi: Int = -90,
 )

@@ -112,6 +112,27 @@ class ScannerViewModelTest {
     }
 
     @Test
+    fun rssiFilterHidesDevicesBelowThreshold() = runTest(mainDispatcherRule.testDispatcher) {
+        viewModel.startScan()
+        runCurrent()
+        fakeScanner.emit(device(address = "weak", rssi = -80))
+        fakeScanner.emit(device(address = "strong", rssi = -50))
+        advanceTimeBy(1_000L.milliseconds)
+        runCurrent()
+
+        viewModel.setMinimumRssi(-60)
+        runCurrent()
+
+        assertEquals(
+            listOf("strong"),
+            viewModel.uiState.value.devices.map { it.address },
+        )
+
+        viewModel.stopScan()
+        runCurrent()
+    }
+
+    @Test
     fun staleDevicesExpireAfterTimeout() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.startScan()
         runCurrent()

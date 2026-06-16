@@ -23,6 +23,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -81,6 +82,7 @@ class MainActivity : ComponentActivity() {
                         },
                         onStartScan = viewModel::startScan,
                         onStopScan = viewModel::stopScan,
+                        onMinimumRssiChanged = viewModel::setMinimumRssi,
                         modifier = Modifier.padding(innerPadding),
                     )
                 }
@@ -124,6 +126,7 @@ private fun ScannerScreen(
     onRequestPermissions: () -> Unit,
     onStartScan: () -> Unit,
     onStopScan: () -> Unit,
+    onMinimumRssiChanged: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val canScan = permissionState.hasAllPermissions && bluetoothState == BluetoothState.Enabled
@@ -165,6 +168,11 @@ private fun ScannerScreen(
         Text(
             text = if (uiState.isScanning) "Scanning..." else "Idle",
             style = MaterialTheme.typography.bodyLarge,
+        )
+
+        RssiFilter(
+            minimumRssi = uiState.minimumRssi,
+            onMinimumRssiChanged = onMinimumRssiChanged,
         )
 
         if (uiState.devices.isEmpty()) {
@@ -217,6 +225,22 @@ private fun StatusMessage(
         else -> {
             Text("Ready to scan")
         }
+    }
+}
+
+@Composable
+private fun RssiFilter(
+    minimumRssi: Int,
+    onMinimumRssiChanged: (Int) -> Unit,
+) {
+    Column {
+        Text("Minimum RSSI: $minimumRssi dBm")
+        Slider(
+            value = minimumRssi.toFloat(),
+            onValueChange = { value -> onMinimumRssiChanged(value.toInt()) },
+            valueRange = -90f..-40f,
+            steps = 49,
+        )
     }
 }
 
@@ -278,6 +302,7 @@ private fun ScannerScreenPreview() {
             onRequestPermissions = {},
             onStartScan = {},
             onStopScan = {},
+            onMinimumRssiChanged = {},
         )
     }
 }
