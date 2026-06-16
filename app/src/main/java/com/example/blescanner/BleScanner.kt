@@ -97,7 +97,7 @@ private fun ScanResult.toBleDevice(): BleDevice = BleDevice(
     address = device.address,
     rssi = rssi,
     lastSeenMillis = System.currentTimeMillis(),
-    iBeacon = null,
+    iBeacon = IBeaconParser.parse(scanRecord?.bytes),
 )
 
 data class BleDevice(
