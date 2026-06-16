@@ -2,8 +2,8 @@ package com.example.blescanner
 
 import android.Manifest
 import android.os.Build
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class BleScannerTest {
@@ -37,6 +37,14 @@ class BleScannerTest {
         assertEquals(
             listOf(Manifest.permission.ACCESS_FINE_LOCATION),
             AndroidBleScanner.requiredPermissionsForSdk(Build.VERSION_CODES.R),
+        )
+    }
+
+    @Test
+    fun backgroundLocationPermissionForAndroid10AndAbove() {
+        assertEquals(
+            Manifest.permission.ACCESS_BACKGROUND_LOCATION,
+            BluetoothPermissions.backgroundLocationPermissionForSdk(Build.VERSION_CODES.Q),
         )
     }
 

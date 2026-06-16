@@ -147,7 +147,12 @@ object BluetoothPermissions {
             listOf(Manifest.permission.ACCESS_FINE_LOCATION)
         }
 
+    fun backgroundLocationPermissionForSdk(sdkInt: Int): String? =
+        if (sdkInt >= Build.VERSION_CODES.Q) Manifest.permission.ACCESS_BACKGROUND_LOCATION else null
+
     fun runtimePermissions(): List<String> = runtimePermissionsForSdk(Build.VERSION.SDK_INT)
+
+    fun backgroundLocationPermission(): String? = backgroundLocationPermissionForSdk(Build.VERSION.SDK_INT)
 }
 
 data class BleDevice(

@@ -24,6 +24,11 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
+    <!-- Background location permission is not required if we are only interested in scanning when
+    the app is visible, but if we would like scanning to continue with the app hidden, or even with
+    the screen off, then this is mandatory -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"

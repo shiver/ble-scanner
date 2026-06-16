@@ -4,7 +4,9 @@ import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -91,6 +93,7 @@ class MainActivity : ComponentActivity() {
                         onRequestPermissions = {
                             permissionLauncher.launch(BluetoothPermissions.runtimePermissions().toTypedArray())
                         },
+                        onOpenAppSettings = ::openAppSettings,
                         onStartScan = {
                             viewModel.startScan()
                             startBleScanForegroundService()
@@ -105,6 +108,14 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun openAppSettings() {
+        val intent = Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.fromParts("package", packageName, null),
+        )
+        startActivity(intent)
     }
 
     private fun startBleScanForegroundService() {
@@ -130,11 +141,16 @@ class MainActivity : ComponentActivity() {
         val missingPermissions = BluetoothPermissions.runtimePermissions().filter { permission ->
             ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED
         }
+        val backgroundLocationPermission = BluetoothPermissions.backgroundLocationPermission()
+        val hasBackgroundLocation = backgroundLocationPermission == null ||
+            ContextCompat.checkSelfPermission(this, backgroundLocationPermission) == PackageManager.PERMISSION_GRANTED
+
         return PermissionState(
             missingPermissions = missingPermissions,
             shouldShowRationale = missingPermissions.any { permission ->
                 shouldShowRequestPermissionRationale(permission)
             },
+            hasBackgroundLocation = hasBackgroundLocation,
         )
     }
 
@@ -160,6 +176,7 @@ private fun ScannerScreen(
     bluetoothState: BluetoothState,
     uiState: ScannerUiState,
     onRequestPermissions: () -> Unit,
+    onOpenAppSettings: () -> Unit,
     onStartScan: () -> Unit,
     onStopScan: () -> Unit,
     onMinimumRssiChanged: (Int) -> Unit,
@@ -184,6 +201,7 @@ private fun ScannerScreen(
             bluetoothState = bluetoothState,
             errorMessage = uiState.errorMessage,
             onRequestPermissions = onRequestPermissions,
+            onOpenAppSettings = onOpenAppSettings,
         )
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -231,6 +249,7 @@ private fun StatusMessage(
     bluetoothState: BluetoothState,
     errorMessage: String?,
     onRequestPermissions: () -> Unit,
+    onOpenAppSettings: () -> Unit,
 ) {
     when {
         !permissionState.hasAllPermissions -> {
@@ -252,6 +271,13 @@ private fun StatusMessage(
 
         bluetoothState == BluetoothState.Disabled -> {
             Text("Bluetooth is disabled. Enable Bluetooth before scanning.")
+        }
+
+        !permissionState.hasBackgroundLocation -> {
+            Text("Background location is not granted. Foreground scanning can work, but background scan results may be limited on this device.")
+            Button(onClick = onOpenAppSettings) {
+                Text("Open app settings")
+            }
         }
 
         errorMessage != null -> {
@@ -315,6 +341,7 @@ private fun DeviceRow(device: BleDevice) {
 data class PermissionState(
     val missingPermissions: List<String> = emptyList(),
     val shouldShowRationale: Boolean = false,
+    val hasBackgroundLocation: Boolean = true,
 ) {
     val hasAllPermissions: Boolean = missingPermissions.isEmpty()
 }
@@ -336,6 +363,7 @@ private fun ScannerScreenPreview() {
                 devices = FakeScanScenario.MixedDevices.devices,
             ),
             onRequestPermissions = {},
+            onOpenAppSettings = {},
             onStartScan = {},
             onStopScan = {},
             onMinimumRssiChanged = {},

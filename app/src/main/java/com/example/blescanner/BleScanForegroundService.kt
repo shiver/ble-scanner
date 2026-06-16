@@ -32,10 +32,13 @@ class BleScanForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // In order to conserve battery we scan in LowPower mode when the app is in the background.
+        // The tradeoff is a much lower polling rate, which could result in slow discovery, or
+        // even not finding devices if they happen to just fall out of sync with our polls.
         when (intent?.action) {
             ACTION_STOP -> stopSelf()
-            ACTION_SET_FOREGROUND_MODE -> restartScanning(BleScanMode.LowLatency)
-            ACTION_SET_BACKGROUND_MODE -> restartScanning(BleScanMode.Balanced)
+            ACTION_SET_BACKGROUND_MODE -> restartScanning(BleScanMode.LowPower)
+            ACTION_SET_FOREGROUND_MODE -> restartScanning(BleScanMode.Balanced)
             else -> startForegroundScanning(BleScanMode.Balanced)
         }
         return START_STICKY
