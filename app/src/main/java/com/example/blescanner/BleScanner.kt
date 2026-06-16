@@ -1,7 +1,6 @@
 package com.example.blescanner
 
 import android.Manifest
-import android.annotation.SuppressLint
 import android.bluetooth.BluetoothManager
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanFilter
@@ -10,13 +9,14 @@ import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
-import android.os.ParcelUuid
 import android.util.Log
+import androidx.annotation.RequiresPermission
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import java.util.Locale
+import androidx.core.util.isNotEmpty
 
 private const val BLE_SCANNER_TAG = "BleScanner"
 
@@ -82,6 +82,7 @@ class AndroidBleScanner(
         }
 
         val callback = object : ScanCallback() {
+            @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
             override fun onScanResult(callbackType: Int, result: ScanResult) {
                 val manufacturerId = result.scanRecord?.manufacturerSpecificData?.firstKey()
                 val manufacturerDataPrefix = manufacturerId
@@ -100,6 +101,7 @@ class AndroidBleScanner(
                 trySend(result.toBleDevice())
             }
 
+            @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
             override fun onBatchScanResults(results: MutableList<ScanResult>) {
                 Log.i(BLE_SCANNER_TAG, "Batch scan results: count=${results.size}")
                 results.forEach { result -> trySend(result.toBleDevice()) }
@@ -160,7 +162,7 @@ class AndroidBleScanner(
     }
 }
 
-@SuppressLint("MissingPermission")
+@RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
 private fun ScanResult.toBleDevice(): BleDevice {
     val manufacturerId = scanRecord?.manufacturerSpecificData?.firstKey()
     return BleDevice(
@@ -175,7 +177,7 @@ private fun ScanResult.toBleDevice(): BleDevice {
 }
 
 private fun <T> android.util.SparseArray<T>.firstKey(): Int? =
-    if (size() > 0) keyAt(0) else null
+    if (isNotEmpty()) keyAt(0) else null
 
 private fun ByteArray.toHexString(): String =
     joinToString(separator = " ") { byte -> "%02x".format(byte.toInt() and 0xff) }

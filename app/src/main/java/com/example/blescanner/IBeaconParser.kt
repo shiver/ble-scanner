@@ -1,19 +1,34 @@
 package com.example.blescanner
 
 object IBeaconParser {
+
+    // BLE advertising field:
+    //   [length] [type = 0xff] [manufacturer data...]
+    //
+    //   Manufacturer data:
+    //   4c 00        Apple company identifier, little-endian
+    //   02           iBeacon type
+    //   15           iBeacon data length, 21 bytes
+    //   UUID         16 bytes
+    //   major        2 bytes, big-endian
+    //   minor        2 bytes, big-endian
+    //   tx power     1 byte
     fun parse(scanRecordBytes: ByteArray?): IBeaconData? {
         if (scanRecordBytes == null) return null
 
         var index = 0
         while (index < scanRecordBytes.size) {
-            val length = scanRecordBytes[index].toInt() and 0xff
+            // We convert to UByte because ByteArray stores signed bytes (-128 to 127), and then we
+            // convert to Int since it is easier and less errorprone for the conditionals and
+            // arithmetic we'll need to do with the `length`.
+            val length = scanRecordBytes[index].toUByte().toInt()
             if (length == 0) return null
 
             val typeIndex = index + 1
             val nextIndex = index + length + 1
             if (typeIndex >= scanRecordBytes.size || nextIndex > scanRecordBytes.size) return null
 
-            val type = scanRecordBytes[typeIndex].toInt() and 0xff
+            val type = scanRecordBytes[typeIndex].toUByte().toInt()
             if (type == MANUFACTURER_SPECIFIC_DATA_TYPE) {
                 val manufacturerDataIndex = typeIndex + 1
                 val manufacturerDataLength = length - 1

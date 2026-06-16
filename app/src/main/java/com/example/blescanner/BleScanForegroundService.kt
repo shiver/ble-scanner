@@ -6,10 +6,14 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -30,6 +34,27 @@ class BleScanForegroundService : Service() {
     private var scanJob: Job? = null
     private var heartbeatJob: Job? = null
     private lateinit var bleScanner: BleScanner
+    private var currentScanMode: BleScanMode? = null
+    private var currentFilterMode: BleScanFilterMode? = null
+    private var appVisible = true
+    private var screenInteractive = true
+
+    private val screenStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                Intent.ACTION_SCREEN_OFF -> {
+                    Log.i(BLE_SCAN_SERVICE_TAG, "Screen off detected")
+                    screenInteractive = false
+                    restartScanningForCurrentState()
+                }
+                Intent.ACTION_SCREEN_ON -> {
+                    Log.i(BLE_SCAN_SERVICE_TAG, "Screen on detected")
+                    screenInteractive = true
+                    restartScanningForCurrentState()
+                }
+            }
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -39,20 +64,36 @@ class BleScanForegroundService : Service() {
         } else {
             AndroidBleScanner(this)
         }
+        screenInteractive = getSystemService(PowerManager::class.java).isInteractive
+        registerReceiver(
+            screenStateReceiver,
+            IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_SCREEN_ON)
+            },
+        )
         createNotificationChannel()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> stopSelf()
-            ACTION_SET_BACKGROUND_MODE -> restartScanning(
-                scanMode = BleScanMode.LowPower,
-                filterMode = BleScanFilterMode.IBeacon,
-            )
-            else -> restartScanning(
-                scanMode = BleScanMode.Balanced,
-                filterMode = BleScanFilterMode.AllDevices,
-            )
+            ACTION_SET_FOREGROUND_MODE -> {
+                appVisible = true
+                restartScanningForCurrentState()
+            }
+            ACTION_SET_BACKGROUND_MODE -> {
+                appVisible = false
+                restartScanningForCurrentState()
+            }
+            ACTION_SET_SCREEN_OFF_MODE -> {
+                screenInteractive = false
+                restartScanningForCurrentState()
+            }
+            else -> {
+                appVisible = true
+                restartScanningForCurrentState()
+            }
         }
         return START_STICKY
     }
@@ -60,16 +101,44 @@ class BleScanForegroundService : Service() {
     override fun onDestroy() {
         scanJob?.cancel()
         heartbeatJob?.cancel()
+        unregisterReceiver(screenStateReceiver)
         serviceScope.cancel()
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    private fun restartScanningForCurrentState() {
+        when {
+            !screenInteractive -> restartScanning(
+                scanMode = BleScanMode.LowPower,
+                filterMode = BleScanFilterMode.IBeacon,
+            )
+            appVisible -> restartScanning(
+                scanMode = BleScanMode.LowLatency,
+                filterMode = BleScanFilterMode.AllDevices,
+            )
+            else -> restartScanning(
+                scanMode = BleScanMode.Balanced,
+                filterMode = BleScanFilterMode.AllDevices,
+            )
+        }
+    }
+
     private fun restartScanning(
         scanMode: BleScanMode,
         filterMode: BleScanFilterMode,
     ) {
+        if (
+            scanJob?.isActive == true &&
+            currentScanMode == scanMode &&
+            currentFilterMode == filterMode
+        ) {
+            return
+        }
+
+        currentScanMode = scanMode
+        currentFilterMode = filterMode
         scanJob?.cancel()
         scanJob = null
         startForegroundScanning(scanMode, filterMode)
@@ -160,6 +229,7 @@ class BleScanForegroundService : Service() {
         const val ACTION_STOP = "com.example.blescanner.action.STOP_BACKGROUND_SCAN"
         const val ACTION_SET_FOREGROUND_MODE = "com.example.blescanner.action.SET_FOREGROUND_MODE"
         const val ACTION_SET_BACKGROUND_MODE = "com.example.blescanner.action.SET_BACKGROUND_MODE"
+        const val ACTION_SET_SCREEN_OFF_MODE = "com.example.blescanner.action.SET_SCREEN_OFF_MODE"
         private const val NOTIFICATION_CHANNEL_ID = "ble_scanning"
         private const val NOTIFICATION_ID = 1001
     }
