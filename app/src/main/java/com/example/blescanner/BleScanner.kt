@@ -4,11 +4,13 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothManager
 import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.ParcelUuid
 import android.util.Log
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.channels.awaitClose
@@ -18,7 +20,15 @@ import kotlinx.coroutines.flow.callbackFlow
 private const val BLE_SCANNER_TAG = "BleScanner"
 
 interface BleScanner {
-    fun scanResults(scanMode: BleScanMode = BleScanMode.Balanced): Flow<BleDevice>
+    fun scanResults(
+        scanMode: BleScanMode = BleScanMode.Balanced,
+        filterMode: BleScanFilterMode = BleScanFilterMode.AllDevices,
+    ): Flow<BleDevice>
+}
+
+enum class BleScanFilterMode {
+    AllDevices,
+    IBeacon,
 }
 
 enum class BleScanMode(val scanSettingsValue: Int) {
@@ -35,11 +45,13 @@ class AndroidBleScanner(
         applicationContext.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val bluetoothAdapter = bluetoothManager.adapter
 
-    @SuppressLint("MissingPermission")
-    override fun scanResults(scanMode: BleScanMode): Flow<BleDevice> = callbackFlow {
+    override fun scanResults(
+        scanMode: BleScanMode,
+        filterMode: BleScanFilterMode,
+    ): Flow<BleDevice> = callbackFlow {
         Log.i(BLE_SCANNER_TAG, "scanResults collection started")
-        // Importantly we don't cache things like whether or not we have the necessary permissions, or
-        // the bluetooth devices, since this can change between scanning sessions.
+        // Importantly we don't cache things like whether we have the necessary permissions, or
+        // the bluetooth device is enabled, since this can change between scanning sessions.
         if (!hasRequiredPermissions()) {
             Log.w(BLE_SCANNER_TAG, "Cannot start scan: missing permissions ${requiredPermissions()}")
             close(SecurityException("Missing required Bluetooth scan permissions"))
@@ -73,7 +85,20 @@ class AndroidBleScanner(
 
         val callback = object : ScanCallback() {
             override fun onScanResult(callbackType: Int, result: ScanResult) {
-                Log.i(BLE_SCANNER_TAG, "Scan result: address=${result.device.address}, rssi=${result.rssi}")
+                val manufacturerId = result.scanRecord?.manufacturerSpecificData?.firstKey()
+                val manufacturerDataPrefix = manufacturerId
+                    ?.let { id -> result.scanRecord?.manufacturerSpecificData?.get(id) }
+                    ?.take(4)
+                    ?.toByteArray()
+                    ?.toHexString()
+                    ?: "none"
+                val manufacturerIdText = manufacturerId?.let { id -> "0x${id.toString(16).padStart(4, '0')}" } ?: "none"
+
+                Log.i(
+                    BLE_SCANNER_TAG,
+                    "Scan result: address=${result.device.address}, rssi=${result.rssi}, " +
+                        "manufacturerId=$manufacturerIdText, manufacturerDataFirst4=$manufacturerDataPrefix",
+                )
                 trySend(result.toBleDevice())
             }
 
@@ -92,9 +117,11 @@ class AndroidBleScanner(
             .setScanMode(scanMode.scanSettingsValue)
             .build()
 
+        val filters = filtersFor(filterMode)
+
         try {
-            Log.i(BLE_SCANNER_TAG, "Starting BLE scan with mode=$scanMode")
-            bluetoothLeScanner.startScan(null, settings, callback)
+            Log.i(BLE_SCANNER_TAG, "Starting BLE scan with mode=$scanMode filterMode=$filterMode")
+            bluetoothLeScanner.startScan(filters, settings, callback)
         } catch (securityException: SecurityException) {
             close(securityException)
             return@callbackFlow
@@ -110,6 +137,20 @@ class AndroidBleScanner(
         }
     }
 
+    private fun filtersFor(filterMode: BleScanFilterMode): List<ScanFilter> =
+        when (filterMode) {
+            BleScanFilterMode.AllDevices -> listOf(ScanFilter.Builder().build())
+            BleScanFilterMode.IBeacon -> listOf(
+                ScanFilter.Builder()
+                    .setManufacturerData(
+                        APPLE_COMPANY_ID,
+                        byteArrayOf(),
+                        byteArrayOf()
+                    )
+                    .build(),
+            )
+        }
+
     fun hasRequiredPermissions(): Boolean = requiredPermissions().all { permission ->
         ContextCompat.checkSelfPermission(applicationContext, permission) ==
             PackageManager.PERMISSION_GRANTED
@@ -124,13 +165,37 @@ class AndroidBleScanner(
 }
 
 @SuppressLint("MissingPermission")
-private fun ScanResult.toBleDevice(): BleDevice = BleDevice(
-    name = scanRecord?.deviceName ?: device.name,
-    address = device.address,
-    rssi = rssi,
-    lastSeenMillis = System.currentTimeMillis(),
-    iBeacon = IBeaconParser.parse(scanRecord?.bytes),
-)
+private fun ScanResult.toBleDevice(): BleDevice {
+    val manufacturerId = scanRecord?.manufacturerSpecificData?.firstKey()
+    return BleDevice(
+        name = scanRecord?.deviceName ?: device.name,
+        address = device.address,
+        rssi = rssi,
+        lastSeenMillis = System.currentTimeMillis(),
+        iBeacon = IBeaconParser.parse(scanRecord?.bytes),
+        manufacturerId = manufacturerId,
+        manufacturerName = manufacturerId?.bluetoothCompanyName(),
+    )
+}
+
+private fun <T> android.util.SparseArray<T>.firstKey(): Int? =
+    if (size() > 0) keyAt(0) else null
+
+private fun ByteArray.toHexString(): String =
+    joinToString(separator = " ") { byte -> "%02x".format(byte.toInt() and 0xff) }
+
+private fun Int.bluetoothCompanyName(): String = when (this) {
+    0x004c -> "Apple, Inc."
+    0x0006 -> "Microsoft"
+    0x000f -> "Broadcom"
+    0x0075 -> "Samsung Electronics"
+    0x00e0 -> "Google"
+    0x0131 -> "Sony Corporation"
+    0x0182 -> "Qualcomm Technologies International"
+    0x02ff -> "Tile, Inc."
+    0x0499 -> "Ruuvi Innovations Ltd."
+    else -> "Unknown company"
+}
 
 object BluetoothPermissions {
     fun runtimePermissionsForSdk(sdkInt: Int): List<String> =
@@ -155,12 +220,19 @@ object BluetoothPermissions {
     fun backgroundLocationPermission(): String? = backgroundLocationPermissionForSdk(Build.VERSION.SDK_INT)
 }
 
+private const val APPLE_COMPANY_ID = 0x004c
+private const val SAMSUNG_COMPANY_ID = 0x0075
+private const val IBEACON_TYPE = 0x02
+private const val IBEACON_DATA_LENGTH = 0x15
+
 data class BleDevice(
     val name: String?,
     val address: String,
     val rssi: Int,
     val lastSeenMillis: Long,
     val iBeacon: IBeaconData?,
+    val manufacturerId: Int? = null,
+    val manufacturerName: String? = null,
 )
 
 data class IBeaconData(

@@ -10,19 +10,25 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
+
+private const val BLE_SCAN_SERVICE_TAG = "BleScanService"
 
 class BleScanForegroundService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var scanJob: Job? = null
+    private var heartbeatJob: Job? = null
     private lateinit var bleScanner: BleScanner
 
     override fun onCreate() {
@@ -32,33 +38,42 @@ class BleScanForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // In order to conserve battery we scan in LowPower mode when the app is in the background.
-        // The tradeoff is a much lower polling rate, which could result in slow discovery, or
-        // even not finding devices if they happen to just fall out of sync with our polls.
         when (intent?.action) {
             ACTION_STOP -> stopSelf()
-            ACTION_SET_BACKGROUND_MODE -> restartScanning(BleScanMode.LowPower)
-            ACTION_SET_FOREGROUND_MODE -> restartScanning(BleScanMode.Balanced)
-            else -> startForegroundScanning(BleScanMode.Balanced)
+            ACTION_SET_BACKGROUND_MODE -> restartScanning(
+                scanMode = BleScanMode.LowPower,
+                filterMode = BleScanFilterMode.IBeacon,
+            )
+            else -> restartScanning(
+                scanMode = BleScanMode.Balanced,
+                filterMode = BleScanFilterMode.AllDevices,
+            )
         }
         return START_STICKY
     }
 
     override fun onDestroy() {
         scanJob?.cancel()
+        heartbeatJob?.cancel()
         serviceScope.cancel()
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    private fun restartScanning(scanMode: BleScanMode) {
+    private fun restartScanning(
+        scanMode: BleScanMode,
+        filterMode: BleScanFilterMode,
+    ) {
         scanJob?.cancel()
         scanJob = null
-        startForegroundScanning(scanMode)
+        startForegroundScanning(scanMode, filterMode)
     }
 
-    private fun startForegroundScanning(scanMode: BleScanMode) {
+    private fun startForegroundScanning(
+        scanMode: BleScanMode,
+        filterMode: BleScanFilterMode,
+    ) {
         if (!canPostForegroundNotification()) {
             stopSelf()
             return
@@ -68,12 +83,30 @@ class BleScanForegroundService : Service() {
 
         if (scanJob?.isActive == true) return
 
+        startHeartbeat(scanMode, filterMode)
+
         scanJob = serviceScope.launch {
-            bleScanner.scanResults(scanMode)
+            bleScanner.scanResults(scanMode, filterMode)
                 .catch { stopSelf() }
                 .collect { device ->
                     BleScanRepository.update(device)
                 }
+        }
+    }
+
+    private fun startHeartbeat(
+        scanMode: BleScanMode,
+        filterMode: BleScanFilterMode,
+    ) {
+        heartbeatJob?.cancel()
+        heartbeatJob = serviceScope.launch {
+            while (true) {
+                Log.i(
+                    BLE_SCAN_SERVICE_TAG,
+                    "Foreground service alive; scanActive=${scanJob?.isActive == true}; mode=$scanMode filterMode=$filterMode",
+                )
+                delay(10_000L.milliseconds)
+            }
         }
     }
 

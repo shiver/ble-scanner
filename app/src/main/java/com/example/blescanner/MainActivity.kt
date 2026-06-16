@@ -326,6 +326,10 @@ private fun DeviceRow(device: BleDevice) {
             )
             Text("MAC: ${device.address}")
             Text("RSSI: ${device.rssi} dBm")
+            device.manufacturerId?.let { manufacturerId ->
+                Text("Manufacturer ID: 0x${manufacturerId.toString(16).padStart(4, '0')}")
+                Text("Company: ${device.manufacturerName ?: "Unknown company"}")
+            }
 
             device.iBeacon?.let { iBeacon ->
                 Spacer(modifier = Modifier.height(8.dp))
