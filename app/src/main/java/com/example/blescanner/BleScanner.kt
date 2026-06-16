@@ -18,7 +18,13 @@ import kotlinx.coroutines.flow.callbackFlow
 private const val BLE_SCANNER_TAG = "BleScanner"
 
 interface BleScanner {
-    fun scanResults(): Flow<BleDevice>
+    fun scanResults(scanMode: BleScanMode = BleScanMode.Balanced): Flow<BleDevice>
+}
+
+enum class BleScanMode(val scanSettingsValue: Int) {
+    LowLatency(ScanSettings.SCAN_MODE_LOW_LATENCY),
+    Balanced(ScanSettings.SCAN_MODE_BALANCED),
+    LowPower(ScanSettings.SCAN_MODE_LOW_POWER),
 }
 
 class AndroidBleScanner(
@@ -30,7 +36,7 @@ class AndroidBleScanner(
     private val bluetoothAdapter = bluetoothManager.adapter
 
     @SuppressLint("MissingPermission")
-    override fun scanResults(): Flow<BleDevice> = callbackFlow {
+    override fun scanResults(scanMode: BleScanMode): Flow<BleDevice> = callbackFlow {
         Log.i(BLE_SCANNER_TAG, "scanResults collection started")
         // Importantly we don't cache things like whether or not we have the necessary permissions, or
         // the bluetooth devices, since this can change between scanning sessions.
@@ -83,11 +89,11 @@ class AndroidBleScanner(
         }
 
         val settings = ScanSettings.Builder()
-            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            .setScanMode(scanMode.scanSettingsValue)
             .build()
 
         try {
-            Log.i(BLE_SCANNER_TAG, "Starting BLE scan")
+            Log.i(BLE_SCANNER_TAG, "Starting BLE scan with mode=$scanMode")
             bluetoothLeScanner.startScan(null, settings, callback)
         } catch (securityException: SecurityException) {
             close(securityException)

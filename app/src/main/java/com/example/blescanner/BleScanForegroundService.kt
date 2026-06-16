@@ -34,7 +34,9 @@ class BleScanForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> stopSelf()
-            else -> startForegroundScanning()
+            ACTION_SET_FOREGROUND_MODE -> restartScanning(BleScanMode.LowLatency)
+            ACTION_SET_BACKGROUND_MODE -> restartScanning(BleScanMode.Balanced)
+            else -> startForegroundScanning(BleScanMode.Balanced)
         }
         return START_STICKY
     }
@@ -47,7 +49,13 @@ class BleScanForegroundService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    private fun startForegroundScanning() {
+    private fun restartScanning(scanMode: BleScanMode) {
+        scanJob?.cancel()
+        scanJob = null
+        startForegroundScanning(scanMode)
+    }
+
+    private fun startForegroundScanning(scanMode: BleScanMode) {
         if (!canPostForegroundNotification()) {
             stopSelf()
             return
@@ -58,11 +66,10 @@ class BleScanForegroundService : Service() {
         if (scanJob?.isActive == true) return
 
         scanJob = serviceScope.launch {
-            bleScanner.scanResults()
+            bleScanner.scanResults(scanMode)
                 .catch { stopSelf() }
-                .collect {
-                    // The foreground service keeps BLE scanning active while the app is backgrounded.
-                    // UI display is handled by the foreground scanner/ViewModel while the app is open.
+                .collect { device ->
+                    BleScanRepository.update(device)
                 }
         }
     }
@@ -110,6 +117,8 @@ class BleScanForegroundService : Service() {
 
     companion object {
         const val ACTION_STOP = "com.example.blescanner.action.STOP_BACKGROUND_SCAN"
+        const val ACTION_SET_FOREGROUND_MODE = "com.example.blescanner.action.SET_FOREGROUND_MODE"
+        const val ACTION_SET_BACKGROUND_MODE = "com.example.blescanner.action.SET_BACKGROUND_MODE"
         private const val NOTIFICATION_CHANNEL_ID = "ble_scanning"
         private const val NOTIFICATION_ID = 1001
     }

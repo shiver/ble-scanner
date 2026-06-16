@@ -9,7 +9,7 @@ import kotlin.time.Duration.Companion.milliseconds
 class FakeBleScanner(
     private val scenario: FakeScanScenario = FakeScanScenario.MixedDevices,
 ) : BleScanner {
-    override fun scanResults(): Flow<BleDevice> = flow {
+    override fun scanResults(scanMode: BleScanMode): Flow<BleDevice> = flow {
         var sequence = 0
         if (scenario.devices.isEmpty()) awaitCancellation()
 

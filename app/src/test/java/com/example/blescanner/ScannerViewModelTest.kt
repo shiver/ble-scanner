@@ -3,8 +3,7 @@ package com.example.blescanner
 import android.app.Application
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
@@ -28,7 +27,7 @@ class ScannerViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
-    private val fakeScanner = ManualBleScanner()
+    private val devices = MutableStateFlow<List<BleDevice>>(emptyList())
     private var now = 1_000L
 
     private lateinit var viewModel: ScannerViewModel
@@ -37,7 +36,7 @@ class ScannerViewModelTest {
     fun setUp() {
         viewModel = ScannerViewModel(
             application = Application(),
-            bleScanner = fakeScanner,
+            deviceSource = devices,
             nowMillis = { now },
         )
     }
@@ -54,7 +53,6 @@ class ScannerViewModelTest {
 
         assertTrue(viewModel.uiState.value.isScanning)
         assertEquals(null, viewModel.uiState.value.errorMessage)
-
         viewModel.stopScan()
         runCurrent()
     }
@@ -69,25 +67,22 @@ class ScannerViewModelTest {
 
         assertFalse(viewModel.uiState.value.isScanning)
         assertEquals(null, viewModel.uiState.value.errorMessage)
-
-        viewModel.stopScan()
-        runCurrent()
     }
 
     @Test
     fun duplicateAddressUpdatesExistingDevice() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.startScan()
         runCurrent()
-        fakeScanner.emit(device(address = "AA:BB", rssi = -80))
-        fakeScanner.emit(device(address = "AA:BB", rssi = -40, name = "Updated"))
+        devices.value = listOf(device(address = "AA:BB", rssi = -80))
+        runCurrent()
+        devices.value = listOf(device(address = "AA:BB", rssi = -40, name = "Updated"))
         advanceTimeBy(1_000L.milliseconds)
         runCurrent()
 
-        val devices = viewModel.uiState.value.devices
-        assertEquals(1, devices.size)
-        assertEquals("Updated", devices.single().name)
-        assertEquals(-40, devices.single().rssi)
-
+        val visibleDevices = viewModel.uiState.value.devices
+        assertEquals(1, visibleDevices.size)
+        assertEquals("Updated", visibleDevices.single().name)
+        assertEquals(-40, visibleDevices.single().rssi)
         viewModel.stopScan()
         runCurrent()
     }
@@ -96,9 +91,11 @@ class ScannerViewModelTest {
     fun devicesAreSortedByDescendingRssi() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.startScan()
         runCurrent()
-        fakeScanner.emit(device(address = "weak", rssi = -90))
-        fakeScanner.emit(device(address = "strong", rssi = -35))
-        fakeScanner.emit(device(address = "middle", rssi = -60))
+        devices.value = listOf(
+            device(address = "weak", rssi = -90),
+            device(address = "strong", rssi = -35),
+            device(address = "middle", rssi = -60),
+        )
         advanceTimeBy(1_000L.milliseconds)
         runCurrent()
 
@@ -106,7 +103,6 @@ class ScannerViewModelTest {
             listOf("strong", "middle", "weak"),
             viewModel.uiState.value.devices.map { it.address },
         )
-
         viewModel.stopScan()
         runCurrent()
     }
@@ -115,8 +111,10 @@ class ScannerViewModelTest {
     fun rssiFilterHidesDevicesBelowThreshold() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.startScan()
         runCurrent()
-        fakeScanner.emit(device(address = "weak", rssi = -80))
-        fakeScanner.emit(device(address = "strong", rssi = -50))
+        devices.value = listOf(
+            device(address = "weak", rssi = -80),
+            device(address = "strong", rssi = -50),
+        )
         advanceTimeBy(1_000L.milliseconds)
         runCurrent()
 
@@ -127,7 +125,6 @@ class ScannerViewModelTest {
             listOf("strong"),
             viewModel.uiState.value.devices.map { it.address },
         )
-
         viewModel.stopScan()
         runCurrent()
     }
@@ -136,7 +133,7 @@ class ScannerViewModelTest {
     fun staleDevicesExpireAfterTimeout() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel.startScan()
         runCurrent()
-        fakeScanner.emit(device(address = "stale", rssi = -50, lastSeenMillis = 1_000L))
+        devices.value = listOf(device(address = "stale", rssi = -50, lastSeenMillis = 1_000L))
         advanceTimeBy(1_000L.milliseconds)
         runCurrent()
         assertEquals(listOf("stale"), viewModel.uiState.value.devices.map { it.address })
@@ -146,7 +143,6 @@ class ScannerViewModelTest {
         runCurrent()
 
         assertEquals(emptyList<String>(), viewModel.uiState.value.devices.map { it.address })
-
         viewModel.stopScan()
         runCurrent()
     }
@@ -163,16 +159,6 @@ class ScannerViewModelTest {
         lastSeenMillis = lastSeenMillis,
         iBeacon = null,
     )
-}
-
-private class ManualBleScanner : BleScanner {
-    private val results = MutableSharedFlow<BleDevice>(extraBufferCapacity = 16)
-
-    override fun scanResults(): Flow<BleDevice> = results
-
-    suspend fun emit(device: BleDevice) {
-        results.emit(device)
-    }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)

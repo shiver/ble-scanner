@@ -31,6 +31,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -62,11 +63,20 @@ class MainActivity : ComponentActivity() {
                     bluetoothState = currentBluetoothState()
                 }
 
+                val isScanning by rememberUpdatedState(uiState.isScanning)
+
                 DisposableEffect(Unit) {
                     val observer = LifecycleEventObserver { _, event ->
-                        if (event == Lifecycle.Event.ON_RESUME) {
-                            permissionState = currentPermissionState()
-                            bluetoothState = currentBluetoothState()
+                        when (event) {
+                            Lifecycle.Event.ON_RESUME -> {
+                                permissionState = currentPermissionState()
+                                bluetoothState = currentBluetoothState()
+                                if (isScanning) setBleScanServiceMode(BleScanForegroundService.ACTION_SET_FOREGROUND_MODE)
+                            }
+                            Lifecycle.Event.ON_STOP -> {
+                                if (isScanning) setBleScanServiceMode(BleScanForegroundService.ACTION_SET_BACKGROUND_MODE)
+                            }
+                            else -> Unit
                         }
                     }
                     lifecycle.addObserver(observer)
@@ -100,6 +110,13 @@ class MainActivity : ComponentActivity() {
     private fun startBleScanForegroundService() {
         val intent = Intent(this, BleScanForegroundService::class.java)
         ContextCompat.startForegroundService(this, intent)
+    }
+
+    private fun setBleScanServiceMode(action: String) {
+        val intent = Intent(this, BleScanForegroundService::class.java).apply {
+            this.action = action
+        }
+        startService(intent)
     }
 
     private fun stopBleScanForegroundService() {

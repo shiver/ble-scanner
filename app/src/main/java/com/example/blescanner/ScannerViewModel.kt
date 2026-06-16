@@ -3,33 +3,38 @@ package com.example.blescanner
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class ScannerViewModel(
     application: Application,
-    private val bleScanner: BleScanner,
+    private val deviceSource: StateFlow<List<BleDevice>>,
     // `nowMillis()` allows us to inject a fake time during tests so we don't actually have to wait.
     private val nowMillis: () -> Long,
 ) : AndroidViewModel(application) {
     constructor(application: Application) : this(
         application = application,
-        bleScanner = AndroidBleScanner(application),
+        deviceSource = BleScanRepository.devices,
         nowMillis = System::currentTimeMillis,
     )
+
     private val devicesByAddress = mutableMapOf<String, BleDevice>()
 
-    private val _uiState = MutableStateFlow(ScannerUiState())
-    val uiState: StateFlow<ScannerUiState> = _uiState.asStateFlow()
+    private val _uiState = kotlinx.coroutines.flow.MutableStateFlow(ScannerUiState())
+    val uiState: StateFlow<ScannerUiState> = _uiState
 
-    private var scanJob: Job? = null
     private var publishJob: Job? = null
+
+    init {
+        viewModelScope.launch {
+            deviceSource.collect { devices ->
+                devices.forEach { device -> devicesByAddress[device.address] = device }
+                publishDevices()
+            }
+        }
+    }
 
     fun startScan() {
         if (_uiState.value.isScanning) return
@@ -38,24 +43,6 @@ class ScannerViewModel(
             isScanning = true,
             errorMessage = null,
         )
-
-        scanJob = viewModelScope.launch {
-            bleScanner.scanResults()
-                .collect { device ->
-                    devicesByAddress[device.address] = device
-                }
-        }
-
-        scanJob?.invokeOnCompletion { throwable ->
-            if (throwable != null && throwable !is CancellationException) {
-                _uiState.value = _uiState.value.copy(
-                    isScanning = false,
-                    errorMessage = throwable.message ?: "BLE scan stopped unexpectedly",
-                )
-                stopPublishing()
-            }
-        }
-
         startPublishing()
     }
 
@@ -65,8 +52,6 @@ class ScannerViewModel(
     }
 
     fun stopScan() {
-        scanJob?.cancel()
-        scanJob = null
         stopPublishing()
         publishDevices()
         _uiState.value = _uiState.value.copy(isScanning = false)
@@ -80,7 +65,7 @@ class ScannerViewModel(
     private fun startPublishing() {
         publishJob?.cancel()
         publishJob = viewModelScope.launch {
-            while (isActive) {
+            while (true) {
                 publishDevices()
                 delay(UI_UPDATE_INTERVAL_MS)
             }
