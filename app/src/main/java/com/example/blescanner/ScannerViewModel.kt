@@ -14,10 +14,15 @@ import kotlinx.coroutines.launch
 
 class ScannerViewModel(
     application: Application,
-    private val bleScanner: BleScanner = AndroidBleScanner(application),
-    // `nowMillis()` allows us to inject a fake times during tests so we don't actually have to wait
-    private val nowMillis: () -> Long = System::currentTimeMillis,
+    private val bleScanner: BleScanner,
+    // `nowMillis()` allows us to inject a fake time during tests so we don't actually have to wait.
+    private val nowMillis: () -> Long,
 ) : AndroidViewModel(application) {
+    constructor(application: Application) : this(
+        application = application,
+        bleScanner = AndroidBleScanner(application),
+        nowMillis = System::currentTimeMillis,
+    )
     private val devicesByAddress = mutableMapOf<String, BleDevice>()
 
     private val _uiState = MutableStateFlow(ScannerUiState())
