@@ -3,6 +3,7 @@ package com.example.blescanner
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,6 +15,8 @@ import kotlinx.coroutines.launch
 class ScannerViewModel(
     application: Application,
     private val bleScanner: BleScanner = AndroidBleScanner(application),
+    // `nowMillis()` allows us to inject a fake times during tests so we don't actually have to wait
+    private val nowMillis: () -> Long = System::currentTimeMillis,
 ) : AndroidViewModel(application) {
     private val devicesByAddress = mutableMapOf<String, BleDevice>()
 
@@ -39,7 +42,7 @@ class ScannerViewModel(
         }
 
         scanJob?.invokeOnCompletion { throwable ->
-            if (throwable != null) {
+            if (throwable != null && throwable !is CancellationException) {
                 _uiState.value = _uiState.value.copy(
                     isScanning = false,
                     errorMessage = throwable.message ?: "BLE scan stopped unexpectedly",
@@ -80,7 +83,7 @@ class ScannerViewModel(
     }
 
     private fun publishDevices() {
-        val now = System.currentTimeMillis()
+        val now = nowMillis()
         val currentState = _uiState.value
         val visibleDevices = devicesByAddress.values
             .asSequence()
