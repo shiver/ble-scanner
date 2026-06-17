@@ -52,20 +52,16 @@ For iBeacon frames, the manufacturer data layout is:
 | 22 | 2 bytes | Minor | Big-endian | Parsed as an unsigned 16-bit integer. |
 | 24 | 1 byte | Measured power / Tx power | Signed byte | Present in the frame, but currently ignored by the app. |
 
-IMPORTANT: It is likely that I may have got some aspect of the parsing may be incorrect or incomplete, as I 
-apparently only had one compatible device available to verify this with.
+IMPORTANT: It is likely that some aspect of the parsing may be incorrect or incomplete, as I 
+only had a single compatible device available to verify this with.
 
 ## Background scanning
 
 ### Foreground services vs WorkManager
 
 For this task I opted to use a foreground service rather than a `WorkManager`. My understanding of 
-`WorkManager` is that it is more intended to be used for periodic tasks background tasks, whereas 
-foreground services are better suited to long-running user visible tasks like ours.
-
-With each new Android release, it appears as if Bluetooth scanning has been further and further 
-restricted, justified either by reduced power consumption, or security concerns. As such there are 
-a few provisions that I needed to make in order to avoid these imposed limitations.
+`WorkManager` is that it is more intended to be used for periodic background tasks, whereas 
+foreground services are better suited to long-running user visible tasks like our own.
 
 ### Frequent scanning restrictions (rescan delay)
 
@@ -90,7 +86,7 @@ More specifically we alter the `scanMode` under the following conditions:
 It is common for Android OEMs to introduce additional limitations when scanning for Bluetooth devices
 when the filter provided to `startScan()` is unrestricted. When tested on both Oppo and Samsung
 devices, both were able to scan for devices when the application is not visible, even in `LowPower` 
-mode. However, when the screen is turned off, Bluetooth scanning is appeared to be heavily restricted, 
+mode. However, when the screen is turned off, Bluetooth scanning appeared to be heavily restricted, 
 unless done so with a specific `ScanFilter`.
 
 ```kotlin
