@@ -31,6 +31,15 @@ class IBeaconParserTest {
     }
 
     @Test
+    fun returnsNullForNonManufacturerSpecificDataType() {
+        val bytes = validIBeaconScanRecord().apply {
+            this[1] = 0x16 // service data type, not manufacturer-specific data
+        }
+
+        assertNull(IBeaconParser.parse(bytes))
+    }
+
+    @Test
     fun returnsNullForMalformedShortIBeaconData() {
         val bytes = byteArrayOf(
             0x06, 0xff.toByte(),

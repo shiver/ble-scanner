@@ -6,7 +6,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Test
 
-class BleScannerTest {
+class BluetoothPermissionsTest {
     @Test
     fun requiredPermissionsForAndroid12AndAbove() {
         assertEquals(
@@ -15,7 +15,7 @@ class BleScannerTest {
                 Manifest.permission.BLUETOOTH_CONNECT,
                 Manifest.permission.ACCESS_FINE_LOCATION,
             ),
-            AndroidBleScanner.requiredPermissionsForSdk(Build.VERSION_CODES.S),
+            BluetoothPermissions.runtimePermissionsForSdk(Build.VERSION_CODES.S),
         )
     }
 
@@ -28,7 +28,7 @@ class BleScannerTest {
                 Manifest.permission.ACCESS_FINE_LOCATION,
                 Manifest.permission.POST_NOTIFICATIONS,
             ),
-            AndroidBleScanner.requiredPermissionsForSdk(Build.VERSION_CODES.TIRAMISU),
+            BluetoothPermissions.runtimePermissionsForSdk(Build.VERSION_CODES.TIRAMISU),
         )
     }
 
@@ -36,7 +36,7 @@ class BleScannerTest {
     fun requiredPermissionsForAndroid11AndBelow() {
         assertEquals(
             listOf(Manifest.permission.ACCESS_FINE_LOCATION),
-            AndroidBleScanner.requiredPermissionsForSdk(Build.VERSION_CODES.R),
+            BluetoothPermissions.runtimePermissionsForSdk(Build.VERSION_CODES.R),
         )
     }
 
@@ -47,7 +47,7 @@ class BleScannerTest {
                 Manifest.permission.ACCESS_FINE_LOCATION,
                 Manifest.permission.ACCESS_COARSE_LOCATION,
             ),
-            AndroidBleScanner.requiredPermissionsForSdk(Build.VERSION_CODES.P),
+            BluetoothPermissions.runtimePermissionsForSdk(Build.VERSION_CODES.P),
         )
     }
 
@@ -57,12 +57,24 @@ class BleScannerTest {
             Manifest.permission.ACCESS_BACKGROUND_LOCATION,
             BluetoothPermissions.backgroundLocationPermissionForSdk(Build.VERSION_CODES.Q),
         )
+        assertEquals(
+            Manifest.permission.ACCESS_BACKGROUND_LOCATION,
+            BluetoothPermissions.backgroundLocationPermissionForSdk(Build.VERSION_CODES.R),
+        )
+    }
+
+    @Test
+    fun backgroundLocationPermissionForAndroid9AndBelowIsNotRequired() {
+        assertEquals(
+            null,
+            BluetoothPermissions.backgroundLocationPermissionForSdk(Build.VERSION_CODES.P),
+        )
     }
 
     @Test
     fun requiredPermissionsForAndroid11AndBelowDoesNotRequestNotifications() {
         assertFalse(
-            AndroidBleScanner.requiredPermissionsForSdk(Build.VERSION_CODES.R)
+            BluetoothPermissions.runtimePermissionsForSdk(Build.VERSION_CODES.R)
                 .contains(Manifest.permission.POST_NOTIFICATIONS),
         )
     }
