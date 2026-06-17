@@ -3,6 +3,33 @@
 A short project to explore Bluetooth scanning capabilities for Android devices, with support for
 manually parsing iBeacon manufacturer data.
 
+## Build instructions
+
+Open the project in Android Studio, let Gradle sync, then run the `app` configuration on a physical Android device.
+
+From the command line:
+
+```bash
+./gradlew assembleDebug
+```
+
+The debug APK will be created at:
+
+```text
+app/build/outputs/apk/debug/app-debug.apk
+```
+
+Alternatively you can install to all devices:
+```text
+./gradlew installDebug
+```
+
+## Running the app
+
+You can either build and deploy the application to a device using the build instructions above,
+or you can check the [releases](https://github.com/shiver/ble-scanner/releases) for the project on GitHub
+to download an APK directly.
+
 ## iBeacon parsing
 
 I opted to forego a library for iBeacon parsing in this instance, primarily because the format itself 
@@ -25,9 +52,13 @@ For iBeacon frames, the manufacturer data layout is:
 | 22 | 2 bytes | Minor | Big-endian | Parsed as an unsigned 16-bit integer. |
 | 24 | 1 byte | Measured power / Tx power | Signed byte | Present in the frame, but currently ignored by the app. |
 
+IMPORTANT: It is likely that I may have got some aspect of the parsing may be incorrect or incomplete, as I 
+apparently only had one compatible device available to verify this with.
+
 ## Background scanning
 
 ### Foreground services vs WorkManager
+
 For this task I opted to use a foreground service rather than a `WorkManager`. My understanding of 
 `WorkManager` is that it is more intended to be used for periodic tasks background tasks, whereas 
 foreground services are better suited to long-running user visible tasks like ours.
