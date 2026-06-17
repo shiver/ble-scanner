@@ -85,6 +85,25 @@ This obviously means that scanning in this state will miss a lot of non-Apple de
 
 ### Background scanning permissions
 
+Android's Bluetooth scanning permissions differ significantly by OS version:
+
+| Android version | Runtime permissions used by the app | Notes |
+| --- | --- | --- |
+| Android 6-9 / API 23-28 | `ACCESS_FINE_LOCATION` and/or `ACCESS_COARSE_LOCATION` | BLE scan results can reveal physical location, so location permission is required for scan results. There is no separate background location permission on these versions. |
+| Android 10 / API 29 | `ACCESS_FINE_LOCATION`, then `ACCESS_BACKGROUND_LOCATION` as a separate request | Background location must be requested separately after foreground location is granted. This app can request it directly on Android 10. |
+| Android 11 / API 30 | `ACCESS_FINE_LOCATION`; background location via system settings | Android 11 removed the normal runtime dialog path for granting "Allow all the time". The app explains the requirement and directs the user to app settings. |
+| Android 12+ / API 31+ | `BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT`, `ACCESS_FINE_LOCATION` | Android introduced dedicated nearby-device Bluetooth permissions. This app still requests location because BLE scanning can expose proximity/location information and because location improves compatibility across devices/OEMs. |
+| Android 13+ / API 33+ | Same as Android 12+, plus `POST_NOTIFICATIONS` | A foreground service requires a visible notification, and Android 13 requires notification runtime permission. |
+
+A few gotchas:
+
+- Foreground and background location are not the same permission on Android 10+.
+- On Android 11+, apps generally cannot show a normal permission dialog for "Allow all the time" location; users must enable it in system settings.
+- A foreground service cannot run silently. If the service is active, Android requires a persistent notification.
+- Even with the correct permissions and a foreground service, Android/OEM battery policies may throttle or suppress BLE scans, especially when the screen is off.
+- Some devices require Location Services to be enabled globally before BLE scan results are delivered, even when app permissions are granted.
+- `BLUETOOTH_ADMIN` is not central to this app's modern `BluetoothLeScanner.startScan(...)` flow, but older Bluetooth examples often include it for legacy adapter/discovery operations.
+
 ## RSSI filter
 
 I opted to implement the RSSI filter in the UI layer only. So technically our scans will find devices
@@ -102,6 +121,9 @@ which I mentioned earlier was already problematic for us
 
 - There might be a better way to allow for scanning when the screen is off, but it would require more
 time to investigate.
+
+- RSSI updates frequently for the same device. It might give a better user experience to track a few
+values over time and provide an average/median instead of a new value each time one arrives.
 
 - `BleScanForegroundService` is independently tracking screen state (on/off), and I suspect there might
 be a more idiomatic way to do this, which perhaps should be done outside the foreground service. Perhaps
