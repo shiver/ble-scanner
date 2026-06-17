@@ -18,10 +18,7 @@ object IBeaconParser {
 
         var index = 0
         while (index < scanRecordBytes.size) {
-            // We convert to UByte because ByteArray stores signed bytes (-128 to 127), and then we
-            // convert to Int since it is easier and less errorprone for the conditionals and
-            // arithmetic we'll need to do with the `length`.
-            val length = scanRecordBytes[index].toUByte().toInt()
+            val length = unsignedByte(scanRecordBytes[index])
             if (length == 0) return null
 
             val typeIndex = index + 1
@@ -53,8 +50,8 @@ object IBeaconParser {
     ): IBeaconData? {
         if (length < IBEACON_MANUFACTURER_DATA_LENGTH) return null
 
-        val appleCompanyId = unsignedByte(scanRecordBytes[offset]) or
-            (unsignedByte(scanRecordBytes[offset + 1]) shl 8)
+        // iBeacon devices are by definition Apple devices
+        val appleCompanyId = unsignedByte(scanRecordBytes[offset]) or (unsignedByte(scanRecordBytes[offset + 1]) shl 8)
         if (appleCompanyId != APPLE_COMPANY_ID) return null
 
         val beaconType = unsignedByte(scanRecordBytes[offset + 2])
@@ -78,10 +75,13 @@ object IBeaconParser {
     private fun unsignedShortBigEndian(bytes: ByteArray, offset: Int): Int =
         (unsignedByte(bytes[offset]) shl 8) or unsignedByte(bytes[offset + 1])
 
+    // We're often deailing with a ByteArray, which stores signed bytes (-128 to 127). In order
+    // to reduce complexity with conditionals and arithmetic, it is often more convenient to convert
+    // these to Ints.
     private fun unsignedByte(byte: Byte): Int = byte.toInt() and 0xff
 
+    const val APPLE_COMPANY_ID = 0x004c
     private const val MANUFACTURER_SPECIFIC_DATA_TYPE = 0xff
-    private const val APPLE_COMPANY_ID = 0x004c
     private const val IBEACON_TYPE = 0x02
     private const val IBEACON_DATA_LENGTH = 0x15
     private const val IBEACON_MANUFACTURER_DATA_LENGTH = 25

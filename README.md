@@ -11,7 +11,19 @@ but also because I prefer to know exactly why I need a dependency before I take 
 
 I found the following resource somewhat helpful when creating the parser: https://community.silabs.com/s/article/Understanding-iBeacon-Packet-Format-and-SiWx917-Implementation?language=en_US
 
-As for how this works
+The parser walks the raw BLE advertising data as AD structures of the form `[length][type][data...]` and only attempts iBeacon parsing for AD structures with type `0xff` / manufacturer-specific data.
+
+For iBeacon frames, the manufacturer data layout is:
+
+| Offset | Size | Value / field | Endianness | Notes |
+| ---: | ---: | --- | --- | --- |
+| 0 | 2 bytes | `0x004c` / Apple company identifier | Little-endian, encoded as `4c 00` | Required by the iBeacon format. |
+| 2 | 1 byte | `0x02` / iBeacon type | N/A | Identifies this Apple manufacturer payload as iBeacon. |
+| 3 | 1 byte | `0x15` / iBeacon data length | N/A | Decimal 21: UUID + major + minor + measured power. |
+| 4 | 16 bytes | Proximity UUID | Byte sequence | Rendered as a standard UUID string. |
+| 20 | 2 bytes | Major | Big-endian | Parsed as an unsigned 16-bit integer. |
+| 22 | 2 bytes | Minor | Big-endian | Parsed as an unsigned 16-bit integer. |
+| 24 | 1 byte | Measured power / Tx power | Signed byte | Present in the frame, but currently ignored by the app. |
 
 ## Background scanning
 
@@ -62,7 +74,7 @@ ScanFilter.Builder()
 
 In summary, the application will adopt the following scan mode and filters:
 - App visible: LowLatency / Unfiltered
-- App not visible: LowPower / Unfiltered
+- App not visible: Balanced / Unfiltered
 - Screen off: LowPower / Apple Manufacturer ID
 
 Given that the task specifically called attention to iBeacon devices, I opted to target iBeacon 

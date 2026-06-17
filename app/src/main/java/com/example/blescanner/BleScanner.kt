@@ -10,7 +10,6 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
-import androidx.annotation.RequiresApi
 import androidx.annotation.RequiresPermission
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.channels.awaitClose
@@ -150,7 +149,7 @@ class AndroidBleScanner(
             BleScanFilterMode.IBeacon -> listOf(
                 ScanFilter.Builder()
                     .setManufacturerData(
-                        APPLE_COMPANY_ID,
+                        IBeaconParser.APPLE_COMPANY_ID,
                         byteArrayOf(),
                         byteArrayOf()
                     )
@@ -271,11 +270,6 @@ object DeviceEnvironment {
             product.contains("simulator")
     }
 }
-
-private const val APPLE_COMPANY_ID = 0x004c
-private const val SAMSUNG_COMPANY_ID = 0x0075
-private const val IBEACON_TYPE = 0x02
-private const val IBEACON_DATA_LENGTH = 0x15
 
 data class BleDevice(
     val name: String?,
