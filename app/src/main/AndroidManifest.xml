@@ -7,8 +7,10 @@
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
-    <!-- Required for background scanning via a foreground service. -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Required for background scanning via a foreground service, which we need to be able to
+     support scanning when the app is not visible, or the screen is off -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"
+        tools:ignore="ForegroundServicesPolicy" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
 
     <!-- Required on Android 13 / API 33 and above to show the foreground-service notification. -->
@@ -16,18 +18,20 @@
 
     <!-- For legacy versions of Android 11 / API 30 and below -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <!-- Not 100% sure that BLUETOOTH_ADMIN is required, but I don't have an older device to test with -->
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
 
     <!-- The app requests location permission because BLE scanning can reveal physical
-         proximity/location information, and some Android devices require location permission/location
-         services for reliable BLE scan results. -->
+    proximity/location information, and some Android devices require location permission/location
+    services for reliable BLE scan results. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
     <!-- Background location permission is not required if we are only interested in scanning when
     the app is visible, but if we would like scanning to continue with the app hidden, or even with
     the screen off, then this is mandatory -->
-    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"
+        tools:ignore="BackgroundLocationPolicy" />
 
     <application
         android:allowBackup="true"
