@@ -7,6 +7,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 class ScannerViewModel(
     application: Application,
@@ -20,6 +21,10 @@ class ScannerViewModel(
         nowMillis = System::currentTimeMillis,
     )
 
+    // Devices are keyed by the BleDevice hardware address.
+    // Importantly this is most likely not fixed for the lifetime of the device, but it is good
+    // enough for the task and our purposes, since this is unlikely to change in the short term, and
+    // we also expire devices from the list that we haven't seen after `DEVICE_TIMEOUT_MS`.
     private val devicesByAddress = mutableMapOf<String, BleDevice>()
 
     private val _uiState = kotlinx.coroutines.flow.MutableStateFlow(ScannerUiState())
@@ -31,7 +36,6 @@ class ScannerViewModel(
         viewModelScope.launch {
             deviceSource.collect { devices ->
                 devices.forEach { device -> devicesByAddress[device.address] = device }
-                publishDevices()
             }
         }
     }
@@ -67,7 +71,7 @@ class ScannerViewModel(
         publishJob = viewModelScope.launch {
             while (true) {
                 publishDevices()
-                delay(UI_UPDATE_INTERVAL_MS)
+                delay(UI_UPDATE_INTERVAL_MS.milliseconds)
             }
         }
     }
@@ -80,18 +84,20 @@ class ScannerViewModel(
     private fun publishDevices() {
         val now = nowMillis()
         val currentState = _uiState.value
+
+        devicesByAddress.entries.removeAll { (_, device) ->
+            now - device.lastSeenMillis > DEVICE_TIMEOUT_MS
+        }
+
         val visibleDevices = devicesByAddress.values
             .asSequence()
-            .filter { device -> now - device.lastSeenMillis <= DEVICE_TIMEOUT_MS }
             .filter { device -> device.rssi >= currentState.minimumRssi }
             .sortedByDescending { device -> device.rssi }
             .toList()
 
-        devicesByAddress.keys
-            .filter { address -> devicesByAddress[address]?.let { now - it.lastSeenMillis > DEVICE_TIMEOUT_MS } == true }
-            .forEach { address -> devicesByAddress.remove(address) }
-
-        _uiState.value = currentState.copy(devices = visibleDevices)
+        if (visibleDevices != currentState.devices) {
+            _uiState.value = currentState.copy(devices = visibleDevices)
+        }
     }
 
     companion object {

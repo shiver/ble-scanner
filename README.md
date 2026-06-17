@@ -1,8 +1,22 @@
 ## iBeacon
 
 https://community.silabs.com/s/article/Understanding-iBeacon-Packet-Format-and-SiWx917-Implementation?language=en_US
+https://bitbucket.org/bluetooth-SIG/public/src/main/assigned_numbers/company_identifiers/company_identifiers.yaml
 
 ## Background scanning
+When a scan is active it is possible that we start/restart scanning several times as
+application state changes:
+- When the app changes from visible to not-visible and vice versa
+- or, when the device screen is disabled
+
+However, if we do this too frequently Android may decide to disable scanning for a few
+seconds. To avoid this we intentionally introduce a delay before we start a new scan as
+determined by `MIN_SCAN_RESTART_INTERVAL_MS`.
+
+We do this so that we can use the right scanning mode for the occasion:
+- LowLatency when the app is visible,
+- Balanced when the app is not visible,
+- and LowPower when the screen is off
 
 Bluetooth scanning modes & filter:
 - App visible: LowLatency / Unfiltered

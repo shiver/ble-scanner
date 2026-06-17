@@ -61,6 +61,8 @@ class BleScanForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        // The Android emulator doesn't support Bluetooth scanning, so the `FakeBleScanner` allows
+        // us to at least test the UI without needing a physical device.
         bleScanner = if (DeviceEnvironment.isEmulator()) {
             Log.i(BLE_SCAN_SERVICE_TAG, "Emulator detected; using FakeBleScanner")
             FakeBleScanner()
@@ -141,6 +143,14 @@ class BleScanForegroundService : Service() {
             return
         }
 
+        // When a scan is active it is possible that we start/restart scanning several times as
+        // application state changes:
+        // - When the app changes from visible to not-visible and vice versa
+        // - or, when the device screen is disabled
+
+        // However, if we do this too frequently Android may decide to disable scanning for a few
+        // seconds. To avoid this we intentionally introduce a delay before we start a new scan as
+        // determined by `MIN_SCAN_RESTART_INTERVAL_MS`.
         val elapsedSinceLastStart = SystemClock.elapsedRealtime() - lastScanStartElapsedMillis
         if (lastScanStartElapsedMillis != 0L && elapsedSinceLastStart < MIN_SCAN_RESTART_INTERVAL_MS) {
             val delayMillis = MIN_SCAN_RESTART_INTERVAL_MS - elapsedSinceLastStart

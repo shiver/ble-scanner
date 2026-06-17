@@ -2,7 +2,6 @@ package com.example.blescanner
 
 import android.Manifest
 import android.bluetooth.BluetoothManager
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -53,8 +52,8 @@ private const val MAIN_ACTIVITY_TAG = "MainActivity"
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         enableEdgeToEdge()
+
         setContent {
             BLEScannerTheme {
                 val viewModel: ScannerViewModel = viewModel()
@@ -185,7 +184,7 @@ class MainActivity : ComponentActivity() {
         val hasBleFeature = packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)
         Log.i(MAIN_ACTIVITY_TAG, "Bluetooth LE feature declared by device: $hasBleFeature")
 
-        val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+        val bluetoothManager = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
         val bluetoothAdapter = bluetoothManager.adapter ?: run {
             Log.i(MAIN_ACTIVITY_TAG, "Bluetooth state: unavailable, adapter is null")
             return BluetoothState.Unavailable
@@ -234,7 +233,6 @@ private fun ScannerScreen(
             errorMessage = uiState.errorMessage,
             onRequestPermissions = onRequestPermissions,
             onRequestBackgroundLocation = onRequestBackgroundLocation,
-            onOpenAppSettings = onOpenAppSettings,
         )
 
         Text(
@@ -289,7 +287,6 @@ private fun StatusMessage(
     errorMessage: String?,
     onRequestPermissions: () -> Unit,
     onRequestBackgroundLocation: () -> Unit,
-    onOpenAppSettings: () -> Unit,
 ) {
     when {
         !permissionState.hasAllPermissions -> {
