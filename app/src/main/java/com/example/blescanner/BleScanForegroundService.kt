@@ -32,15 +32,18 @@ private const val BLE_SCAN_SERVICE_TAG = "BleScanService"
 
 class BleScanForegroundService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private var scanJob: Job? = null
-    private var heartbeatJob: Job? = null
-    private var pendingRestartJob: Job? = null
+    private val scanRestartLimiter = ScanRestartLimiter(MIN_SCAN_RESTART_INTERVAL_MS)
+
     private lateinit var bleScanner: BleScanner
     private var currentScanMode: BleScanMode? = null
     private var currentFilterMode: BleScanFilterMode? = null
-    private var lastScanStartElapsedMillis = 0L
+
+    private var scanJob: Job? = null
+    private var heartbeatJob: Job? = null
+    private var pendingRestartJob: Job? = null
     private var appVisible = true
     private var screenInteractive = true
+    private var lastScanStartElapsedMillis = 0L
 
     private val screenStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -100,7 +103,11 @@ class BleScanForegroundService : Service() {
                 restartScanningForCurrentState()
             }
         }
-        return START_STICKY
+
+        // If Android decides to kill the service for some reason, try to restart it and redeliver
+        // the intent so we can hopefully get back to the right state we were in before the
+        // termination (foreground, background, screen off, etc.)
+        return START_REDELIVER_INTENT
     }
 
     override fun onDestroy() {
@@ -115,20 +122,14 @@ class BleScanForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun restartScanningForCurrentState() {
-        when {
-            !screenInteractive -> restartScanning(
-                scanMode = BleScanMode.LowPower,
-                filterMode = BleScanFilterMode.IBeacon,
-            )
-            appVisible -> restartScanning(
-                scanMode = BleScanMode.LowLatency,
-                filterMode = BleScanFilterMode.AllDevices,
-            )
-            else -> restartScanning(
-                scanMode = BleScanMode.Balanced,
-                filterMode = BleScanFilterMode.AllDevices,
-            )
-        }
+        restartScanning(BleScanPolicy.configFor(
+            appVisible = appVisible,
+            screenInteractive = screenInteractive,
+        ))
+    }
+
+    private fun restartScanning(config: BleScanConfig) {
+        restartScanning(scanMode = config.scanMode, filterMode = config.filterMode)
     }
 
     private fun restartScanning(
@@ -151,9 +152,11 @@ class BleScanForegroundService : Service() {
         // However, if we do this too frequently Android may decide to disable scanning for a few
         // seconds. To avoid this we intentionally introduce a delay before we start a new scan as
         // determined by `MIN_SCAN_RESTART_INTERVAL_MS`.
-        val elapsedSinceLastStart = SystemClock.elapsedRealtime() - lastScanStartElapsedMillis
-        if (lastScanStartElapsedMillis != 0L && elapsedSinceLastStart < MIN_SCAN_RESTART_INTERVAL_MS) {
-            val delayMillis = MIN_SCAN_RESTART_INTERVAL_MS - elapsedSinceLastStart
+        val delayMillis = scanRestartLimiter.delayBeforeRestartMillis(
+            lastScanStartElapsedMillis = lastScanStartElapsedMillis,
+            nowElapsedMillis = SystemClock.elapsedRealtime(),
+        )
+        if (delayMillis > 0L) {
             Log.i(
                 BLE_SCAN_SERVICE_TAG,
                 "Delaying BLE scan restart for ${delayMillis}ms to avoid Android scan frequency limits",
@@ -199,6 +202,9 @@ class BleScanForegroundService : Service() {
         }
     }
 
+    // The heartbeat is intended to act as a debug tool for when the application is either not
+    // visible or when the screen is off. This way, if no new bluetooth devices are present, we can
+    // at least be sure that the foreground service is indeed running as intended.
     private fun startHeartbeat(
         scanMode: BleScanMode,
         filterMode: BleScanFilterMode,
@@ -258,11 +264,7 @@ class BleScanForegroundService : Service() {
     }
 
     private fun notificationContentText(): String =
-        if (hasBackgroundLocationPermission()) {
-            "Scanning for nearby BLE devices"
-        } else {
-            "Background scanning may be limited until all-the-time location is enabled."
-        }
+        BleScanNotificationText.contentText(hasBackgroundLocationPermission())
 
     private fun hasBackgroundLocationPermission(): Boolean {
         val permission = BluetoothPermissions.backgroundLocationPermission() ?: return true

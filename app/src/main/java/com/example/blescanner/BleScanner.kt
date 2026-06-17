@@ -10,6 +10,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.annotation.RequiresPermission
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.channels.awaitClose
@@ -84,7 +85,12 @@ class AndroidBleScanner(
         val callback = object : ScanCallback() {
             @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
             override fun onScanResult(callbackType: Int, result: ScanResult) {
-                val manufacturerId = result.scanRecord?.manufacturerSpecificData?.firstKey()
+                val bleDevice = result.toBleDevice()
+                val manufacturerId = bleDevice.manufacturerId
+
+                // We're doing a bit of extra work here purely for logging purposes and creating
+                // unnecessary copies of data. This is probably something I would opt to remove or
+                // improve in the future, but it makes sense for troubleshooting for now.
                 val manufacturerDataPrefix = manufacturerId
                     ?.let { id -> result.scanRecord?.manufacturerSpecificData?.get(id) }
                     ?.take(4)
@@ -98,7 +104,8 @@ class AndroidBleScanner(
                     "Scan result: address=${result.device.address}, rssi=${result.rssi}, " +
                         "manufacturerId=$manufacturerIdText, manufacturerDataFirst4=$manufacturerDataPrefix",
                 )
-                trySend(result.toBleDevice())
+
+                trySend(bleDevice)
             }
 
             @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
