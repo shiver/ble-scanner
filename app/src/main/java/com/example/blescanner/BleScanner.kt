@@ -250,6 +250,8 @@ private fun Context.hasPermission(permission: String): Boolean =
     ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
 
 object DeviceEnvironment {
+    // A rudimentary way to detect when we're running in an emulated environment.
+    // I'm not sure how accurate this truly is, but it has worked for my testing thus far.
     fun isEmulator(): Boolean {
         val fingerprint = Build.FINGERPRINT.lowercase(Locale.US)
         val model = Build.MODEL.lowercase(Locale.US)

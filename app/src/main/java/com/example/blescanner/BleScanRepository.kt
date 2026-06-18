@@ -21,6 +21,6 @@ object BleScanRepository {
     }
 
     private fun publish() {
-        _devices.value = devicesByAddress.values.sortedByDescending { device -> device.rssi }
+        _devices.value = devicesByAddress.values.toList()
     }
 }

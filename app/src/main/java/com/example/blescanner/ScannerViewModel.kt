@@ -85,6 +85,7 @@ class ScannerViewModel(
         val now = nowMillis()
         val currentState = _uiState.value
 
+        // Expire devices which we haven't seen recently
         devicesByAddress.entries.removeAll { (_, device) ->
             now - device.lastSeenMillis > DEVICE_TIMEOUT_MS
         }
