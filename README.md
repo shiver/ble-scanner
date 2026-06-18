@@ -152,6 +152,19 @@ time to investigate.
 - RSSI updates frequently for the same device. It might give a better user experience to track a few
 values over time and provide an average/median instead of a new value each time one arrives.
 
+- Sending results from the `BleScanner` to the foreground service could fail for a few reasons, such 
+as the channel buffer being full. This is not really the end of the world, and we're likely to be 
+fine to just wait for the device to send the next result. However, in a more robust app we would 
+like to know when this is occurring to ensure it doesn't become a real problem in an area with a 
+lot of bluetooth devices.
+
+- In general a few of the classes/systems are doing a bit too much, and given more time, I would 
+likely reorganise it a bit to make it easier to maintain, and easier to test.
+
+- Right now the `BleScanRepository` is both a global singleton and not thread safe. Given we have 
+only one writer and one reader, this is unlikely to be an immediate issue. However, as the app 
+changes over time, we would want to potentially make changes here.
+
 - `BleScanForegroundService` is independently tracking screen state (on/off), and I suspect there might
 be a more idiomatic way to do this, which perhaps should be done outside the foreground service. Perhaps
 based on the MainActivity's lifecycle events.
