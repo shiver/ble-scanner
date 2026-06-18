@@ -182,6 +182,9 @@ it comes to simulating bluetooth, there are likely changes necessary here.
 - I include a lot of debug information in the UI (mostly around permissions) for illustration purposes. 
 This wouldn't be something I would normally show in a customer facing application.
 
+- The way I am determining the current permissions and which are missing is more complicated than
+it needs to be and could be greatly simplified.
+
 - The UI/UX could be greatly improved, but I opted to focus on functionality given the limited time.
 
 - Instrumented tests that run on device would be a good addition to be able to verify Bluetooth behaviour.
